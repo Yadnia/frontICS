@@ -58,7 +58,7 @@ export const authService = {
     if (!usuario) {
       // Construir usuario básico si el backend sólo devolvió el token y claims
       usuario = {
-        id: response.id || 1,
+        id: String(response.id || "1"),
         username: response.username || credentials.username,
         nombre: response.nombre || credentials.username,
         roles: response.roles || ["ADMIN"],
@@ -90,7 +90,7 @@ export const authService = {
   async getMe(): Promise<UserSummary> {
     if (isMockModeActive()) {
       return {
-        id: 1,
+        id: "u1a10001-0000-0000-0000-000000000001",
         username: "admin",
         nombre: "Administrador del Sistema",
         correo: "admin@colegio.edu.ni",
@@ -111,6 +111,20 @@ export const authService = {
     }
 
     return user as UserSummary;
+  },
+
+  /**
+   * POST /api/auth/registro-tutor
+   * Registro público de tutores
+   */
+  async registroTutor(data: any): Promise<any> {
+    if (isMockModeActive()) {
+      return { success: true, message: "Tutor registrado exitosamente en modo mock" };
+    }
+    return apiClient<any>("/auth/registro-tutor", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
   },
 
   /**

@@ -59,7 +59,7 @@ export function Sidebar() {
       show: canAccess("roles"),
     },
     {
-      name: "Pruebas de API",
+      name: "Estado del Sistema",
       href: "/dashboard/diagnostico",
       icon: Stethoscope,
       show: canAccess("diagnostico"),
@@ -67,47 +67,50 @@ export function Sidebar() {
   ];
 
   return (
-    <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col justify-between shrink-0 min-h-screen text-slate-300 select-none">
+    <aside className="w-64 bg-[#0a1628] border-r border-[#172b4d] flex flex-col justify-between shrink-0 min-h-screen text-slate-300 select-none">
       <div>
-        {/* Brand Header */}
-        <div className="h-16 flex items-center px-6 gap-3 border-b border-slate-800">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-400 flex items-center justify-center text-white shadow-md shadow-indigo-500/20">
-            <GraduationCap className="w-5 h-5" />
+        {/* Brand Header: Azul oscuro, birrete dorado/amarillo, texto blanco */}
+        <div className="h-16 flex items-center px-6 gap-3 border-b border-[#172b4d] bg-[#071120]">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-700 via-blue-600 to-blue-500 flex items-center justify-center text-yellow-300 shadow-md shadow-blue-900/40 border border-yellow-400/30">
+            <GraduationCap className="w-5 h-5 text-yellow-300 drop-shadow" />
           </div>
           <div>
-            <h1 className="font-bold text-white text-base tracking-tight leading-none">
-              ICS Gestión
-            </h1>
-            <p className="text-[11px] text-slate-400 mt-1">Control Estudiantil</p>
+            <div className="flex items-center gap-1.5">
+              <h1 className="font-bold text-white text-base tracking-tight leading-none">
+                IPSFAS
+              </h1>
+              <span className="w-2 h-2 rounded-full bg-yellow-400 inline-block" title="Sistema Activo" />
+            </div>
+            <p className="text-[11px] text-blue-300/80 mt-1 font-medium">Control Escolar</p>
           </div>
         </div>
 
         {/* Mode Indicator Banner */}
-        <div className="mx-4 mt-4 p-3 rounded-xl bg-slate-800/60 border border-slate-700/60">
+        <div className="mx-4 mt-4 p-3 rounded-xl bg-[#0f223f] border border-[#1e3b68]">
           <div className="flex items-center justify-between text-xs font-medium">
-            <span className="flex items-center gap-1.5 text-slate-300">
+            <span className="flex items-center gap-1.5 text-blue-100">
               <span
                 className={`w-2 h-2 rounded-full ${
-                  isMockMode ? "bg-amber-400 animate-pulse" : "bg-emerald-400 animate-ping"
+                  isMockMode ? "bg-yellow-400 animate-pulse" : "bg-emerald-400 animate-pulse"
                 }`}
               />
-              {isMockMode ? "Modo Mock (Offline)" : "Modo Backend Real"}
+              {isMockMode ? "Modo Demostración" : "Servidor Conectado"}
             </span>
             <span
-              className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+              className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-bold ${
                 isMockMode
-                  ? "bg-amber-500/10 text-amber-300"
-                  : "bg-emerald-500/10 text-emerald-300"
+                  ? "bg-yellow-400/20 text-yellow-300 border border-yellow-400/30"
+                  : "bg-emerald-500/10 text-emerald-300 border border-emerald-500/20"
               }`}
             >
-              {isMockMode ? "DEMO" : "API :8080"}
+              {isMockMode ? "DEMO" : "EN LÍNEA"}
             </span>
           </div>
         </div>
 
         {/* Navigation Links */}
         <div className="px-3 py-4">
-          <p className="px-3 text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
+          <p className="px-3 text-[11px] font-bold text-blue-300/60 uppercase tracking-wider mb-2">
             Módulos Principales
           </p>
           <nav className="space-y-1">
@@ -120,17 +123,17 @@ export function Sidebar() {
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                    className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                       isActive
-                        ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
-                        : "text-slate-400 hover:text-white hover:bg-slate-800/80"
+                        ? "bg-blue-600 text-white shadow-lg shadow-blue-700/30 border-l-4 border-yellow-400 pl-2.5"
+                        : "text-blue-200/80 hover:text-white hover:bg-[#142540]"
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <Icon className={`w-4 h-4 ${isActive ? "text-white" : "text-slate-400"}`} />
+                      <Icon className={`w-4 h-4 ${isActive ? "text-yellow-300" : "text-blue-300/70"}`} />
                       <span>{item.name}</span>
                     </div>
-                    {isActive && <ChevronRight className="w-4 h-4 opacity-70" />}
+                    {isActive && <ChevronRight className="w-4 h-4 text-yellow-300" />}
                   </Link>
                 );
               })}
@@ -139,10 +142,10 @@ export function Sidebar() {
       </div>
 
       {/* User Footer Card */}
-      <div className="p-4 border-t border-slate-800">
-        <div className="p-3 rounded-xl bg-slate-800/50 flex items-center justify-between">
+      <div className="p-4 border-t border-[#172b4d] bg-[#071120]">
+        <div className="p-3 rounded-xl bg-[#0f223f] border border-[#1e3b68] flex items-center justify-between">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center font-bold text-xs uppercase shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-blue-600 text-white border border-yellow-400/40 flex items-center justify-center font-bold text-xs uppercase shrink-0 shadow-inner">
               {user?.username ? user.username.substring(0, 2).toUpperCase() : "US"}
             </div>
             <div className="min-w-0">
@@ -150,7 +153,7 @@ export function Sidebar() {
                 {user?.nombre || user?.username || "Usuario"}
               </p>
               <div className="flex items-center gap-1 mt-0.5">
-                <span className="text-[10px] text-slate-400 font-mono">
+                <span className="text-[10px] text-yellow-300 font-mono font-medium">
                   {user?.roles?.[0] || "USUARIO"}
                 </span>
               </div>
@@ -159,7 +162,7 @@ export function Sidebar() {
           <button
             onClick={() => logout()}
             title="Cerrar Sesión"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors shrink-0"
+            className="p-1.5 rounded-lg text-blue-300 hover:text-rose-400 hover:bg-rose-500/10 transition-colors shrink-0"
           >
             <LogOut className="w-4 h-4" />
           </button>

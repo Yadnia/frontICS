@@ -6,22 +6,24 @@ let mockRoles = [...INITIAL_ROLES];
 
 export const rolesService = {
   /**
-   * GET /roles
+   * GET /api/roles
+   * Retorna lista de roles (admite paginación Spring Data)
    */
-  async getAll(): Promise<Role[]> {
+  async getAll(params?: { page?: number; size?: number }): Promise<Role[]> {
     if (isMockModeActive()) {
       return [...mockRoles];
     }
-    const res = await apiClient<any>("/roles", { method: "GET" });
+    const query = params ? `?page=${params.page ?? 0}&size=${params.size ?? 100}` : "?size=100";
+    const res = await apiClient<any>(`/roles${query}`, { method: "GET" });
     return Array.isArray(res) ? res : res.content || [];
   },
 
   /**
-   * GET /roles/{id}
+   * GET /api/roles/{id} (UUID)
    */
-  async getById(id: number): Promise<Role> {
+  async getById(id: string): Promise<Role> {
     if (isMockModeActive()) {
-      const found = mockRoles.find((r) => r.id === id);
+      const found = mockRoles.find((r) => String(r.id) === String(id));
       if (!found) throw new Error("Rol no encontrado");
       return found;
     }
@@ -29,13 +31,13 @@ export const rolesService = {
   },
 
   /**
-   * POST /roles
+   * POST /api/roles
    * { "nombre": "DOCENTE", "descripcion": "..." }
    */
   async create(data: RoleCreateDTO): Promise<Role> {
     if (isMockModeActive()) {
       const newRole: Role = {
-        id: Math.max(0, ...mockRoles.map((r) => r.id)) + 1,
+        id: `rol-${Date.now()}`,
         nombre: data.nombre.toUpperCase(),
         descripcion: data.descripcion,
       };
@@ -52,11 +54,11 @@ export const rolesService = {
   },
 
   /**
-   * PUT /roles/{id}
+   * PUT /api/roles/{id} (UUID)
    */
-  async update(id: number, data: Partial<RoleCreateDTO>): Promise<Role> {
+  async update(id: string, data: Partial<RoleCreateDTO>): Promise<Role> {
     if (isMockModeActive()) {
-      const idx = mockRoles.findIndex((r) => r.id === id);
+      const idx = mockRoles.findIndex((r) => String(r.id) === String(id));
       if (idx === -1) throw new Error("Rol no encontrado");
       mockRoles[idx] = {
         ...mockRoles[idx],
@@ -72,11 +74,11 @@ export const rolesService = {
   },
 
   /**
-   * DELETE /roles/{id}
+   * DELETE /api/roles/{id} (UUID)
    */
-  async delete(id: number): Promise<void> {
+  async delete(id: string): Promise<void> {
     if (isMockModeActive()) {
-      mockRoles = mockRoles.filter((r) => r.id !== id);
+      mockRoles = mockRoles.filter((r) => String(r.id) !== String(id));
       return;
     }
     return apiClient<void>(`/roles/${id}`, { method: "DELETE" });

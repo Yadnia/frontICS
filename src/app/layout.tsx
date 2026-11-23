@@ -4,8 +4,8 @@ import { AuthProvider } from "@/context/AuthContext";
 import { ToastProvider } from "@/context/ToastContext";
 
 export const metadata: Metadata = {
-  title: "ICS - Sistema de Gestión Estudiantil",
-  description: "Plataforma administrativa para gestión de estudiantes, docentes, tutores, usuarios y roles",
+  title: "IPSFAS - Sistema de Control Escolar",
+  description: "Plataforma institucional del Instituto Politécnico San Francisco de Asís (IPSFAS) para la gestión de estudiantes, docentes, tutores y usuarios.",
 };
 
 export default function RootLayout({

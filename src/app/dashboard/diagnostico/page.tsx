@@ -100,16 +100,34 @@ export default function DiagnosticoPage() {
     },
     {
       id: "list-roles",
-      name: "Listar Roles (/roles)",
-      description: "Verifica que los roles base (ADMIN, DOCENTE, etc.) sean consultables",
+      name: "Listar Roles (/api/roles)",
+      description: "Verifica que los roles base con IDs UUID sean consultables",
       method: "GET",
       endpoint: "/roles",
       expectedStatus: 200,
       category: "crud",
     },
     {
+      id: "list-permisos",
+      name: "Consultar Permisos (/api/permisos)",
+      description: "Verifica acceso exclusivo ADMIN para consultar permisos del sistema",
+      method: "GET",
+      endpoint: "/permisos",
+      expectedStatus: 200,
+      category: "auth",
+    },
+    {
+      id: "list-usuarios",
+      name: "Listar Usuarios (/api/usuarios)",
+      description: "Consulta de usuarios paginada (Spring Data Page)",
+      method: "GET",
+      endpoint: "/usuarios",
+      expectedStatus: 200,
+      category: "crud",
+    },
+    {
       id: "list-tutores",
-      name: "Listar Tutores (/tutores)",
+      name: "Listar Tutores (/api/tutores)",
       description: "Consulta el listado de tutores registrados en base de datos",
       method: "GET",
       endpoint: "/tutores",
@@ -117,8 +135,37 @@ export default function DiagnosticoPage() {
       category: "crud",
     },
     {
+      id: "tutor-me",
+      name: "Perfil Propio de Tutor (/api/tutores/me)",
+      description: "Consulta del perfil correspondiente al tutor autenticado",
+      method: "GET",
+      endpoint: "/tutores/me",
+      expectedStatus: 200,
+      expectedStatusAlt: 403,
+      category: "auth",
+    },
+    {
+      id: "tutor-estudiantes",
+      name: "Estudiantes del Tutor (/api/tutores/me/estudiantes)",
+      description: "Consulta de estudiantes asociados al tutor activo",
+      method: "GET",
+      endpoint: "/tutores/me/estudiantes",
+      expectedStatus: 200,
+      expectedStatusAlt: 403,
+      category: "crud",
+    },
+    {
+      id: "list-docentes",
+      name: "Listar Docentes (/api/docentes)",
+      description: "Consulta la planta docente del colegio",
+      method: "GET",
+      endpoint: "/docentes",
+      expectedStatus: 200,
+      category: "crud",
+    },
+    {
       id: "list-estudiantes",
-      name: "Listar Estudiantes (/estudiantes)",
+      name: "Listar Estudiantes (/api/estudiantes)",
       description: "Consulta el listado de estudiantes y sus tutores asignados",
       method: "GET",
       endpoint: "/estudiantes",
@@ -177,7 +224,7 @@ export default function DiagnosticoPage() {
         data: null,
         error:
           err.message ||
-          "No se pudo conectar con el servidor. ¿Spring Boot está encendido en el puerto 8080?",
+          "No se pudo conectar con el servidor. Verifica que el backend esté activo en " + apiUrl,
       };
     }
   };
@@ -265,14 +312,14 @@ export default function DiagnosticoPage() {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-              Diagnóstico y Casos de Prueba REST
+              Estado y Conectividad del Sistema
             </h1>
-            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-100">
-              Postman Tester
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+              Servicios en Red
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            Comprobación automatizada de los casos de seguridad y contratos de la Sección 10 del documento
+            Monitoreo y verificación del estado de conexión con la base de datos y servicios centrales
           </p>
         </div>
 

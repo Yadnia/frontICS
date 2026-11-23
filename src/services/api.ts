@@ -1,26 +1,37 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError } from "axios";
 
 /**
- * Cliente HTTP basado en Axios para interactuar con la API Spring Boot (http://localhost:8080/api/v1).
+ * Cliente HTTP basado en Axios para interactuar con la API Spring Boot (http://localhost:5000/api).
  * Incluye interceptores para:
  * 1. Inyectar automáticamente el Bearer Token JWT en Authorization.
  * 2. Normalizar respuestas y capturar errores HTTP (401, 403, 404, 409, 500).
+ * 3. Compatibilidad flexible para endpoints con o sin prefijo '/api'.
  */
 
-const DEFAULT_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api/v1";
+const DEFAULT_API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
 
 export function getApiBaseUrl(): string {
   if (typeof window !== "undefined") {
     const customUrl = localStorage.getItem("ics_api_url");
-    if (customUrl) return customUrl;
+    // Migrar automáticamente si tenía la URL anterior con puerto 8080
+    if (customUrl) {
+      if (customUrl.includes("8080")) {
+        localStorage.setItem("ics_api_url", DEFAULT_API_URL);
+        return DEFAULT_API_URL;
+      }
+      return customUrl;
+    }
   }
   return DEFAULT_API_URL;
 }
 
 export function setApiBaseUrl(url: string) {
   if (typeof window !== "undefined") {
-    localStorage.setItem("ics_api_url", url.trim());
-    api.defaults.baseURL = url.trim();
+    let normalized = url.trim();
+    // Asegurar que si solo pusieron localhost:5000 sin /api, mantenga compatibilidad
+    if (normalized.endsWith("/")) normalized = normalized.slice(0, -1);
+    localStorage.setItem("ics_api_url", normalized);
+    api.defaults.baseURL = normalized;
   }
 }
 
@@ -104,7 +115,7 @@ api.interceptors.response.use(
     } else if (status === 409) {
       message = message !== "Error de conexión con el servidor" ? message : "Conflicto: el registro ya existe o tiene relaciones activas (409).";
     } else if (!status) {
-      message = `No se pudo conectar con el backend en ${getApiBaseUrl()}. Verifica que Spring Boot esté activo y tenga CORS habilitado.`;
+      message = `No se pudo conectar con el backend en ${getApiBaseUrl()}. Verifica que Spring Boot esté activo en el puerto 5000 y tenga CORS habilitado.`;
     }
 
     // Enriquecer el objeto de error para los componentes
@@ -118,7 +129,8 @@ api.interceptors.response.use(
 );
 
 /**
- * Función puente compatible para invocar endpoints con Axios de forma genérica
+ * Función puente compatible para invocar endpoints con Axios de forma genérica.
+ * Si el endpoint viene con '/api/...' y la baseURL ya incluye '/api', se desduplica automáticamente.
  */
 export async function apiClient<T>(
   endpoint: string,
@@ -131,6 +143,14 @@ export async function apiClient<T>(
 ): Promise<T> {
   const { method = "GET", body, headers, timeoutMs } = options;
 
+  let cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  const baseUrl = getApiBaseUrl();
+
+  // Si la baseURL termina en /api y el endpoint inicia con /api/, evitar duplicación /api/api/...
+  if (baseUrl.endsWith("/api") && cleanEndpoint.startsWith("/api/")) {
+    cleanEndpoint = cleanEndpoint.substring(4);
+  }
+
   let parsedData: any = undefined;
   if (body) {
     try {
@@ -141,7 +161,7 @@ export async function apiClient<T>(
   }
 
   const response = await api.request<T>({
-    url: endpoint,
+    url: cleanEndpoint,
     method,
     data: parsedData,
     headers,

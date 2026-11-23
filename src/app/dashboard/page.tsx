@@ -10,6 +10,7 @@ import { docentesService } from "@/services/docentes.service";
 import { tutoresService } from "@/services/tutores.service";
 import { usuariosService } from "@/services/usuarios.service";
 import { Estudiante } from "@/types/api";
+import { PerfilEstudianteModal } from "@/components/perfiles/PerfilEstudianteModal";
 import {
   GraduationCap,
   Briefcase,
@@ -33,6 +34,8 @@ export default function DashboardPage() {
     usuarios: 0,
   });
   const [recentStudents, setRecentStudents] = useState<Estudiante[]>([]);
+  const [selectedEstudiante, setSelectedEstudiante] = useState<Estudiante | null>(null);
+  const [isPerfilOpen, setIsPerfilOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -86,8 +89,7 @@ export default function DashboardPage() {
             Bienvenido, {user?.nombre || user?.username}
           </h1>
           <p className="mt-2 text-indigo-100 text-sm leading-relaxed">
-            Sistema de Gestión Estudiantil ICS preparado para sincronización con la API REST de
-            Spring Boot y base de datos PostgreSQL 18.
+            Portal oficial de control académico y seguimiento escolar del Instituto Politécnico San Francisco de Asís (IPSFAS).
           </p>
 
           <div className="mt-5 flex flex-wrap items-center gap-3">
@@ -182,11 +184,19 @@ export default function DashboardPage() {
                   </tr>
                 ) : (
                   recentStudents.map((st) => (
-                    <tr key={st.id} className="hover:bg-slate-50/60 transition-colors">
-                      <td className="py-3 px-3 font-mono text-xs font-semibold text-indigo-600">
+                    <tr
+                      key={st.id}
+                      onClick={() => {
+                        setSelectedEstudiante(st);
+                        setIsPerfilOpen(true);
+                      }}
+                      className="hover:bg-slate-50/80 transition-colors cursor-pointer group"
+                      title="Clic para ver perfil completo"
+                    >
+                      <td className="py-3 px-3 font-mono text-xs font-semibold text-blue-600 group-hover:underline">
                         {st.codigoUnico}
                       </td>
-                      <td className="py-3 px-3 font-medium text-slate-800">
+                      <td className="py-3 px-3 font-medium text-slate-800 group-hover:text-blue-600">
                         {st.nombre} {st.apellido}
                       </td>
                       <td className="py-3 px-3 text-xs text-slate-500">{st.sexo === "M" ? "Masc" : "Fem"}</td>
@@ -251,11 +261,11 @@ export default function DashboardPage() {
               {canAccess("diagnostico") && (
                 <Link
                   href="/dashboard/diagnostico"
-                  className="flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-purple-50/60 hover:text-purple-700 text-slate-700 text-xs font-semibold transition-all group"
+                  className="flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-blue-50/60 hover:text-blue-700 text-slate-700 text-xs font-semibold transition-all group"
                 >
                   <span className="flex items-center gap-2.5">
-                    <Terminal className="w-4 h-4 text-purple-600" />
-                    Suite de Diagnóstico & Pruebas REST
+                    <Terminal className="w-4 h-4 text-blue-600" />
+                    Estado y Conectividad del Sistema
                   </span>
                   <ArrowRight className="w-4 h-4 opacity-50 group-hover:opacity-100" />
                 </Link>
@@ -263,35 +273,46 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Verification Checklist according to Section 13 */}
-          <div className="bg-slate-900 rounded-2xl p-6 text-white shadow-sm">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-400 mb-2">
-              Cotejo con Backend Real (Sec. 13)
+          {/* Institutional Information */}
+          <div className="bg-[#0f223f] border border-[#1e3b68] rounded-2xl p-6 text-white shadow-sm">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-yellow-400 mb-2">
+              Información del Ciclo Escolar
             </h3>
-            <p className="text-[11px] text-slate-300 mb-4 leading-relaxed">
-              El frontend está listo con todas las rutas y DTOs propuestos:
+            <p className="text-[11px] text-blue-200/80 mb-4 leading-relaxed">
+              Ciclo lectivo activo para el Instituto Politécnico San Francisco de Asís (IPSFAS):
             </p>
-            <ul className="space-y-2 text-xs text-slate-300">
-              <li className="flex items-center gap-2">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <span>Base URL: <code>/api/v1</code></span>
+            <ul className="space-y-2 text-xs text-slate-200">
+              <li className="flex items-center justify-between py-1 border-b border-blue-900/60">
+                <span className="text-blue-300">Año Lectivo:</span>
+                <span className="font-bold text-white">2026</span>
               </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <span>Header: <code>Authorization: Bearer &lt;jwt&gt;</code></span>
+              <li className="flex items-center justify-between py-1 border-b border-blue-900/60">
+                <span className="text-blue-300">Modalidad:</span>
+                <span className="font-bold text-white">Regular y Técnica</span>
               </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <span>Format: <code>Content-Type: application/json</code></span>
+              <li className="flex items-center justify-between py-1 border-b border-blue-900/60">
+                <span className="text-blue-300">Estado de Matrícula:</span>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold">Activa</span>
               </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <span>Módulos: Auth, Roles, Usuarios, Tutores, Docentes, Estudiantes</span>
+              <li className="flex items-center justify-between py-1">
+                <span className="text-blue-300">Turnos:</span>
+                <span className="font-medium text-slate-300">Matutino / Vespertino</span>
               </li>
             </ul>
           </div>
         </div>
       </div>
+
+      {/* Modal Perfil Completo del Estudiante */}
+      <PerfilEstudianteModal
+        isOpen={isPerfilOpen}
+        onClose={() => setIsPerfilOpen(false)}
+        estudiante={selectedEstudiante}
+        onUpdateEstudiante={(updated) => {
+          setSelectedEstudiante(updated);
+          setRecentStudents((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
+        }}
+      />
     </div>
   );
 }

@@ -10,6 +10,13 @@ import { SearchInput } from "@/components/ui/SearchInput";
 import { Badge, RoleBadge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { PerfilUsuarioModal } from "@/components/perfiles/PerfilUsuarioModal";
+import {
+  validateUsername,
+  validateEmail,
+  validatePassword,
+  validateNotEmpty,
+} from "@/lib/validations";
 import {
   UserCog,
   Plus,
@@ -22,6 +29,10 @@ import {
   XCircle,
   Mail,
   User,
+  FileText,
+  AlertCircle,
+  Check,
+  X,
 } from "lucide-react";
 
 export default function UsuariosPage() {
@@ -39,14 +50,22 @@ export default function UsuariosPage() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isRolesOpen, setIsRolesOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isPerfilOpen, setIsPerfilOpen] = useState(false);
   const [selectedUsuario, setSelectedUsuario] = useState<Usuario | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [createErrors, setCreateErrors] = useState<Record<string, string>>({});
+  const [editErrors, setEditErrors] = useState<Record<string, string>>({});
+
+  const handleOpenPerfil = (usuario: Usuario) => {
+    setSelectedUsuario(usuario);
+    setIsPerfilOpen(true);
+  };
 
   // Form states
   const [createForm, setCreateForm] = useState<UsuarioCreateDTO>({
     username: "",
     correo: "",
-    password: "Temporal#2026",
+    password: "",
     nombre: "",
     apellido: "",
     estado: true,
@@ -85,40 +104,47 @@ export default function UsuariosPage() {
   const filteredUsuarios = useMemo(() => {
     return usuarios.filter((u) => {
       const term = searchTerm.toLowerCase();
+      const n = (u.nombres || u.nombre || "").toLowerCase();
+      const a = (u.apellidos || u.apellido || "").toLowerCase();
       const matchesSearch =
         u.username.toLowerCase().includes(term) ||
-        u.nombre.toLowerCase().includes(term) ||
-        u.apellido.toLowerCase().includes(term) ||
+        n.includes(term) ||
+        a.includes(term) ||
         u.correo.toLowerCase().includes(term);
 
       const matchesRole =
         roleFilter === "ALL" ||
-        u.roles.some((r) => r.toUpperCase() === roleFilter.toUpperCase());
+        u.roles.some((r: any) => String(r).toUpperCase() === roleFilter.toUpperCase());
 
       return matchesSearch && matchesRole;
     });
   }, [usuarios, searchTerm, roleFilter]);
 
   const handleOpenCreate = () => {
+    setCreateErrors({});
+    const defaultRoleId = availableRoles.length > 0 ? availableRoles[0].id : "DOCENTE";
     setCreateForm({
-      username: "mlopez2",
-      correo: "mlopez2@colegio.edu.ni",
-      password: "Temporal#2026",
-      nombre: "María",
-      apellido: "López",
+      username: "",
+      correo: "",
+      password: "",
+      nombre: "",
+      apellido: "",
+      nombres: "",
+      apellidos: "",
       estado: true,
-      roles: ["DOCENTE"],
+      roles: [defaultRoleId],
     });
     setIsCreateOpen(true);
   };
 
   const handleOpenEdit = (usuario: Usuario) => {
+    setEditErrors({});
     setSelectedUsuario(usuario);
     setEditForm({
       username: usuario.username,
       correo: usuario.correo,
-      nombre: usuario.nombre,
-      apellido: usuario.apellido,
+      nombre: usuario.nombre || usuario.nombres || "",
+      apellido: usuario.apellido || usuario.apellidos || "",
     });
     setIsEditOpen(true);
   };
@@ -131,12 +157,62 @@ export default function UsuariosPage() {
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setCreateErrors({});
+
+    const errs: Record<string, string> = {};
+    const uErr = validateUsername(createForm.username);
+    if (uErr) errs.username = uErr;
+    const cErr = validateEmail(createForm.correo);
+    if (cErr) errs.correo = cErr;
+    const nErr = validateNotEmpty(createForm.nombre, "Nombre(s)");
+    if (nErr) errs.nombre = nErr;
+    const aErr = validateNotEmpty(createForm.apellido, "Apellido(s)");
+    if (aErr) errs.apellido = aErr;
+    const pRes = validatePassword(createForm.password);
+    if (!pRes.isValid && pRes.message) {
+      errs.password = pRes.message;
+    }
+    if (!createForm.roles || createForm.roles.length === 0) {
+      errs.roles = "Debes seleccionar al menos un rol para el usuario.";
+    }
+
+    if (Object.keys(errs).length > 0) {
+      setCreateErrors(errs);
+      error("Por favor corrige los errores del formulario antes de continuar.");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      await usuariosService.create(createForm);
-      success("Usuario creado exitosamente");
+      const roleIdOrName = createForm.roles[0];
+      const matchedRole = availableRoles.find(
+        (r) => r.id === roleIdOrName || r.nombre.toUpperCase() === String(roleIdOrName).toUpperCase()
+      );
+      const roleUuid = matchedRole ? matchedRole.id : roleIdOrName;
+
+      const payload: UsuarioCreateDTO = {
+        username: createForm.username.trim(),
+        correo: createForm.correo.trim(),
+        nombres: (createForm.nombre || "").trim(),
+        nombre: (createForm.nombre || "").trim(),
+        apellidos: (createForm.apellido || "").trim(),
+        apellido: (createForm.apellido || "").trim(),
+        password: createForm.password,
+        roles: [roleUuid],
+        estado: createForm.estado,
+      };
+
+      const created = await usuariosService.create(payload);
+      success(`Usuario "${created.username}" creado exitosamente.`);
       setIsCreateOpen(false);
       loadData();
+
+      const rolNombre = (matchedRole?.nombre || "").toUpperCase();
+      if (rolNombre === "DOCENTE") {
+        info("Recuerda crear el perfil en el módulo 'Docentes' vinculando esta cuenta.");
+      } else if (rolNombre === "TUTOR") {
+        info("Recuerda registrar los datos del tutor en el módulo 'Tutores'.");
+      }
     } catch (err: any) {
       error(err.message || "Error al crear usuario");
     } finally {
@@ -147,6 +223,24 @@ export default function UsuariosPage() {
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedUsuario) return;
+    setEditErrors({});
+
+    const errs: Record<string, string> = {};
+    const uErr = validateUsername(editForm.username);
+    if (uErr) errs.username = uErr;
+    const cErr = validateEmail(editForm.correo);
+    if (cErr) errs.correo = cErr;
+    const nErr = validateNotEmpty(editForm.nombre, "Nombre(s)");
+    if (nErr) errs.nombre = nErr;
+    const aErr = validateNotEmpty(editForm.apellido, "Apellido(s)");
+    if (aErr) errs.apellido = aErr;
+
+    if (Object.keys(errs).length > 0) {
+      setEditErrors(errs);
+      error("Por favor completa los campos obligatorios correctamente.");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       await usuariosService.update(selectedUsuario.id, editForm);
@@ -310,11 +404,18 @@ export default function UsuariosPage() {
                   <tr key={u.id} className="hover:bg-slate-50/70 transition-colors">
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs uppercase">
+                        <div
+                          onClick={() => handleOpenPerfil(u)}
+                          className="w-7 h-7 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center font-bold text-xs uppercase cursor-pointer hover:bg-yellow-100 hover:text-blue-900 transition-colors border border-blue-200"
+                          title="Clic para ver perfil del usuario"
+                        >
                           {u.username.substring(0, 2)}
                         </div>
                         <div>
-                          <p className="font-mono text-xs font-bold text-slate-900">
+                          <p
+                            onClick={() => handleOpenPerfil(u)}
+                            className="font-mono text-xs font-bold text-slate-900 hover:text-blue-600 cursor-pointer transition-colors"
+                          >
                             {u.username}
                           </p>
                           <p className="text-[10px] text-slate-400">ID #{u.id}</p>
@@ -347,6 +448,14 @@ export default function UsuariosPage() {
                     </td>
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => handleOpenPerfil(u)}
+                          className="px-2 py-1 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-yellow-50 hover:text-blue-900 rounded-lg border border-blue-200 hover:border-yellow-400 transition-all flex items-center gap-1 shadow-xs"
+                          title="Ver Perfil de Usuario"
+                        >
+                          <FileText className="w-3.5 h-3.5 text-blue-600" />
+                          <span>Perfil</span>
+                        </button>
                         <button
                           onClick={() => handleOpenRoles(u)}
                           className="p-1.5 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
@@ -391,23 +500,34 @@ export default function UsuariosPage() {
         isOpen={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
         title="Crear Usuario"
-        description="Propuesta de contrato: POST /usuarios con roles y contraseña temporal cifrada por BCrypt"
+        description="Ingresa los datos personales y asigna el rol correspondiente a la cuenta"
         maxWidth="lg"
       >
         <form onSubmit={handleCreateSubmit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Nombre de Usuario *
+                Nombre de Usuario * (3 - 40 car.)
               </label>
               <input
                 type="text"
                 value={createForm.username}
-                onChange={(e) => setCreateForm({ ...createForm, username: e.target.value })}
-                placeholder="mlopez"
+                onChange={(e) => {
+                  setCreateForm({ ...createForm, username: e.target.value });
+                  if (createErrors.username) setCreateErrors((prev) => ({ ...prev, username: "" }));
+                }}
+                placeholder="carlos_m"
                 required
-                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className={`w-full px-3 py-2 text-xs bg-slate-50 border rounded-xl font-mono focus:outline-none focus:ring-2 ${
+                  createErrors.username ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20" : "border-slate-200 focus:ring-blue-500"
+                }`}
               />
+              {createErrors.username && (
+                <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1 mt-1">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  <span>{createErrors.username}</span>
+                </p>
+              )}
             </div>
 
             <div>
@@ -417,64 +537,157 @@ export default function UsuariosPage() {
               <input
                 type="email"
                 value={createForm.correo}
-                onChange={(e) => setCreateForm({ ...createForm, correo: e.target.value })}
-                placeholder="mlopez@colegio.edu.ni"
+                onChange={(e) => {
+                  setCreateForm({ ...createForm, correo: e.target.value });
+                  if (createErrors.correo) setCreateErrors((prev) => ({ ...prev, correo: "" }));
+                }}
+                placeholder="usuario@ipsfas.edu"
                 required
-                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className={`w-full px-3 py-2 text-xs bg-slate-50 border rounded-xl focus:outline-none focus:ring-2 ${
+                  createErrors.correo ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20" : "border-slate-200 focus:ring-blue-500"
+                }`}
               />
+              {createErrors.correo && (
+                <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1 mt-1">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  <span>{createErrors.correo}</span>
+                </p>
+              )}
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Contraseña Inicial *
+                Nombre(s) *
+              </label>
+              <input
+                type="text"
+                value={createForm.nombre}
+                onChange={(e) => {
+                  setCreateForm({ ...createForm, nombre: e.target.value });
+                  if (createErrors.nombre) setCreateErrors((prev) => ({ ...prev, nombre: "" }));
+                }}
+                placeholder="María"
+                required
+                className={`w-full px-3 py-2 text-xs bg-slate-50 border rounded-xl focus:outline-none focus:ring-2 ${
+                  createErrors.nombre ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20" : "border-slate-200 focus:ring-blue-500"
+                }`}
+              />
+              {createErrors.nombre && (
+                <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1 mt-1">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  <span>{createErrors.nombre}</span>
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Apellido(s) *
+              </label>
+              <input
+                type="text"
+                value={createForm.apellido}
+                onChange={(e) => {
+                  setCreateForm({ ...createForm, apellido: e.target.value });
+                  if (createErrors.apellido) setCreateErrors((prev) => ({ ...prev, apellido: "" }));
+                }}
+                placeholder="López"
+                required
+                className={`w-full px-3 py-2 text-xs bg-slate-50 border rounded-xl focus:outline-none focus:ring-2 ${
+                  createErrors.apellido ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20" : "border-slate-200 focus:ring-blue-500"
+                }`}
+              />
+              {createErrors.apellido && (
+                <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1 mt-1">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  <span>{createErrors.apellido}</span>
+                </p>
+              )}
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Rol Asignado *
+              </label>
+              <select
+                value={createForm.roles[0] || (availableRoles[0]?.id || "DOCENTE")}
+                onChange={(e) => setCreateForm({ ...createForm, roles: [e.target.value] })}
+                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {availableRoles.length > 0 ? (
+                  availableRoles.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.nombre} {r.descripcion ? `— ${r.descripcion}` : ""}
+                    </option>
+                  ))
+                ) : (
+                  <>
+                    <option value="DOCENTE">DOCENTE</option>
+                    <option value="SECRETARIA">SECRETARIA</option>
+                    <option value="DIRECCION">DIRECCION</option>
+                    <option value="TUTOR">TUTOR</option>
+                    <option value="ADMIN">ADMIN</option>
+                  </>
+                )}
+              </select>
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Contraseña Inicial Segura *
               </label>
               <input
                 type="text"
                 value={createForm.password}
-                onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
-                placeholder="Temporal#2026"
+                onChange={(e) => {
+                  setCreateForm({ ...createForm, password: e.target.value });
+                  if (createErrors.password) setCreateErrors((prev) => ({ ...prev, password: "" }));
+                }}
+                placeholder="Ejemplo: Segura#2026"
                 required
-                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className={`w-full px-3 py-2 text-xs bg-slate-50 border rounded-xl font-mono focus:outline-none focus:ring-2 ${
+                  createErrors.password ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20" : "border-slate-200 focus:ring-blue-500"
+                }`}
               />
-            </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Nombre *</label>
-              <input
-                type="text"
-                value={createForm.nombre}
-                onChange={(e) => setCreateForm({ ...createForm, nombre: e.target.value })}
-                placeholder="María"
-                required
-                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
+              {/* Indicador visual de seguridad de contraseña */}
+              {(() => {
+                const p = validatePassword(createForm.password);
+                return (
+                  <div className="mt-2 p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
+                    <p className="text-[11px] font-semibold text-slate-600">Requisitos de contraseña:</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 text-[10px]">
+                      <span className={`flex items-center gap-1 ${p.hasMinLength ? "text-emerald-700 font-semibold" : "text-slate-400"}`}>
+                        {p.hasMinLength ? <Check className="w-3 h-3 text-emerald-600" /> : <X className="w-3 h-3 text-slate-400" />}
+                        8+ caracteres
+                      </span>
+                      <span className={`flex items-center gap-1 ${p.hasNumber ? "text-emerald-700 font-semibold" : "text-slate-400"}`}>
+                        {p.hasNumber ? <Check className="w-3 h-3 text-emerald-600" /> : <X className="w-3 h-3 text-slate-400" />}
+                        Al menos 1 dígito (0-9)
+                      </span>
+                      <span className={`flex items-center gap-1 ${p.hasUpper ? "text-emerald-700 font-semibold" : "text-slate-400"}`}>
+                        {p.hasUpper ? <Check className="w-3 h-3 text-emerald-600" /> : <X className="w-3 h-3 text-slate-400" />}
+                        1 mayúscula
+                      </span>
+                      <span className={`flex items-center gap-1 ${p.hasLower ? "text-emerald-700 font-semibold" : "text-slate-400"}`}>
+                        {p.hasLower ? <Check className="w-3 h-3 text-emerald-600" /> : <X className="w-3 h-3 text-slate-400" />}
+                        1 minúscula
+                      </span>
+                      <span className={`flex items-center gap-1 ${p.hasSpecial ? "text-emerald-700 font-semibold" : "text-slate-400"}`}>
+                        {p.hasSpecial ? <Check className="w-3 h-3 text-emerald-600" /> : <X className="w-3 h-3 text-slate-400" />}
+                        1 carácter especial (@#$)
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Apellido *</label>
-              <input
-                type="text"
-                value={createForm.apellido}
-                onChange={(e) => setCreateForm({ ...createForm, apellido: e.target.value })}
-                placeholder="López"
-                required
-                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Rol Asignado *</label>
-              <select
-                value={createForm.roles[0] || "DOCENTE"}
-                onChange={(e) => setCreateForm({ ...createForm, roles: [e.target.value] })}
-                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="DOCENTE">DOCENTE</option>
-                <option value="SECRETARIA">SECRETARIA</option>
-                <option value="DIRECCION">DIRECCION</option>
-                <option value="TUTOR">TUTOR</option>
-                <option value="ADMIN">ADMIN</option>
-              </select>
+              {createErrors.password && (
+                <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1 mt-1">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  <span>{createErrors.password}</span>
+                </p>
+              )}
             </div>
           </div>
 
@@ -489,7 +702,7 @@ export default function UsuariosPage() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm transition-all disabled:opacity-50"
+              className="px-4 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm transition-all disabled:opacity-50"
             >
               {isSubmitting ? "Creando..." : "Crear Usuario"}
             </button>
@@ -502,49 +715,93 @@ export default function UsuariosPage() {
         isOpen={isEditOpen}
         onClose={() => setIsEditOpen(false)}
         title="Actualizar Datos del Usuario"
-        description="Propuesta: PUT /usuarios/{id}"
+        description="Modifica los datos personales y de acceso del usuario"
         maxWidth="md"
       >
         <form onSubmit={handleEditSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Username</label>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Username *</label>
             <input
               type="text"
               value={editForm.username}
-              onChange={(e) => setEditForm({ ...editForm, username: e.target.value })}
+              onChange={(e) => {
+                setEditForm({ ...editForm, username: e.target.value });
+                if (editErrors.username) setEditErrors((prev) => ({ ...prev, username: "" }));
+              }}
               required
-              className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className={`w-full px-3 py-2 text-xs bg-slate-50 border rounded-xl font-mono focus:outline-none focus:ring-2 ${
+                editErrors.username ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20" : "border-slate-200 focus:ring-blue-500"
+              }`}
             />
+            {editErrors.username && (
+              <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1 mt-1">
+                <AlertCircle className="w-3.5 h-3.5" />
+                <span>{editErrors.username}</span>
+              </p>
+            )}
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Correo</label>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Correo Electrónico *</label>
             <input
               type="email"
               value={editForm.correo}
-              onChange={(e) => setEditForm({ ...editForm, correo: e.target.value })}
+              onChange={(e) => {
+                setEditForm({ ...editForm, correo: e.target.value });
+                if (editErrors.correo) setEditErrors((prev) => ({ ...prev, correo: "" }));
+              }}
               required
-              className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className={`w-full px-3 py-2 text-xs bg-slate-50 border rounded-xl focus:outline-none focus:ring-2 ${
+                editErrors.correo ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20" : "border-slate-200 focus:ring-blue-500"
+              }`}
             />
+            {editErrors.correo && (
+              <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1 mt-1">
+                <AlertCircle className="w-3.5 h-3.5" />
+                <span>{editErrors.correo}</span>
+              </p>
+            )}
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Nombre</label>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Nombre(s) *</label>
             <input
               type="text"
               value={editForm.nombre}
-              onChange={(e) => setEditForm({ ...editForm, nombre: e.target.value })}
+              onChange={(e) => {
+                setEditForm({ ...editForm, nombre: e.target.value });
+                if (editErrors.nombre) setEditErrors((prev) => ({ ...prev, nombre: "" }));
+              }}
               required
-              className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className={`w-full px-3 py-2 text-xs bg-slate-50 border rounded-xl focus:outline-none focus:ring-2 ${
+                editErrors.nombre ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20" : "border-slate-200 focus:ring-blue-500"
+              }`}
             />
+            {editErrors.nombre && (
+              <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1 mt-1">
+                <AlertCircle className="w-3.5 h-3.5" />
+                <span>{editErrors.nombre}</span>
+              </p>
+            )}
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Apellido</label>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Apellido(s) *</label>
             <input
               type="text"
               value={editForm.apellido}
-              onChange={(e) => setEditForm({ ...editForm, apellido: e.target.value })}
+              onChange={(e) => {
+                setEditForm({ ...editForm, apellido: e.target.value });
+                if (editErrors.apellido) setEditErrors((prev) => ({ ...prev, apellido: "" }));
+              }}
               required
-              className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className={`w-full px-3 py-2 text-xs bg-slate-50 border rounded-xl focus:outline-none focus:ring-2 ${
+                editErrors.apellido ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20" : "border-slate-200 focus:ring-blue-500"
+              }`}
             />
+            {editErrors.apellido && (
+              <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1 mt-1">
+                <AlertCircle className="w-3.5 h-3.5" />
+                <span>{editErrors.apellido}</span>
+              </p>
+            )}
           </div>
 
           <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
@@ -558,7 +815,7 @@ export default function UsuariosPage() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm transition-all disabled:opacity-50"
+              className="px-4 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm transition-all disabled:opacity-50"
             >
               {isSubmitting ? "Actualizando..." : "Actualizar"}
             </button>
@@ -632,6 +889,13 @@ export default function UsuariosPage() {
           </div>
         </form>
       </Modal>
+
+      {/* Modal Perfil de Usuario */}
+      <PerfilUsuarioModal
+        isOpen={isPerfilOpen}
+        onClose={() => setIsPerfilOpen(false)}
+        usuario={selectedUsuario}
+      />
 
       {/* Confirmar Eliminación */}
       <ConfirmDialog

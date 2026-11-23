@@ -34,7 +34,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setTokenState] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isMockMode, setIsMockModeState] = useState<boolean>(false);
-  const [apiUrl, setApiUrlState] = useState<string>("http://localhost:8080/api/v1");
+  const [apiUrl, setApiUrlState] = useState<string>("http://localhost:5000/api");
 
   // Cargar estado inicial desde localStorage al montar en cliente
   useEffect(() => {

@@ -10,6 +10,9 @@ import { SearchInput } from "@/components/ui/SearchInput";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { PerfilDocenteModal } from "@/components/perfiles/PerfilDocenteModal";
+import { getInitials } from "@/lib/utils";
+import { validateCedula, validatePhone, validateNotEmpty } from "@/lib/validations";
 import {
   Briefcase,
   Plus,
@@ -21,6 +24,9 @@ import {
   UserCheck,
   Check,
   X,
+  FileText,
+  AlertCircle,
+  ShieldAlert,
 } from "lucide-react";
 
 export default function DocentesPage() {
@@ -36,8 +42,28 @@ export default function DocentesPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isPerfilOpen, setIsPerfilOpen] = useState(false);
   const [selectedDocente, setSelectedDocente] = useState<Docente | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+
+  const handleOpenPerfil = (doc: Docente) => {
+    setSelectedDocente(doc);
+    setIsPerfilOpen(true);
+  };
+
+  // Cuentas de usuario disponibles (sin docente asignado)
+  const availableUsersForDocente = useMemo(() => {
+    const assignedUserIds = new Set(
+      docentes.map((d) => d.usuarioId || d.usuario?.id).filter(Boolean)
+    );
+    return usuarios.filter((u) => {
+      if (isEditOpen && selectedDocente && (selectedDocente.usuarioId === u.id || selectedDocente.usuario?.id === u.id)) {
+        return true;
+      }
+      return !assignedUserIds.has(u.id);
+    });
+  }, [usuarios, docentes, isEditOpen, selectedDocente]);
 
   // Form State
   const [formData, setFormData] = useState<DocenteCreateDTO>({
@@ -74,40 +100,48 @@ export default function DocentesPage() {
   const filteredDocentes = useMemo(() => {
     return docentes.filter((d) => {
       const term = searchTerm.toLowerCase();
+      const n = (d.nombres || d.nombre || "").toLowerCase();
+      const a = (d.apellidos || d.apellido || "").toLowerCase();
+      const c = (d.cedula || "").toLowerCase();
+      const em = (d.correo || d.usuario?.correo || "").toLowerCase();
+      const tel = d.telefono || "";
       return (
-        d.nombre.toLowerCase().includes(term) ||
-        d.apellido.toLowerCase().includes(term) ||
-        d.cedula.toLowerCase().includes(term) ||
-        d.correo.toLowerCase().includes(term) ||
-        d.telefono.includes(term)
+        n.includes(term) ||
+        a.includes(term) ||
+        c.includes(term) ||
+        em.includes(term) ||
+        tel.includes(term)
       );
     });
   }, [docentes, searchTerm]);
 
   const handleOpenCreate = () => {
+    setValidationErrors({});
+    const initialUser = availableUsersForDocente.length > 0 ? availableUsersForDocente[0] : null;
     setFormData({
-      nombre: "",
-      apellido: "",
-      cedula: "001-120585-2000B",
-      telefono: "87776655",
-      direccion: "Reparto Los Pinos, Matagalpa",
-      correo: "mlopez@colegio.edu.ni",
-      usuarioId: usuarios.length > 0 ? usuarios[0].id : null,
+      nombre: initialUser ? (initialUser.nombres || initialUser.nombre || "") : "",
+      apellido: initialUser ? (initialUser.apellidos || initialUser.apellido || "") : "",
+      correo: initialUser ? initialUser.correo : "",
+      cedula: "",
+      telefono: "",
+      direccion: "",
+      usuarioId: initialUser ? initialUser.id : null,
       estado: true,
     });
     setIsCreateOpen(true);
   };
 
   const handleOpenEdit = (doc: Docente) => {
+    setValidationErrors({});
     setSelectedDocente(doc);
     setFormData({
-      nombre: doc.nombre,
-      apellido: doc.apellido,
+      nombre: doc.nombre || doc.nombres || "",
+      apellido: doc.apellido || doc.apellidos || "",
       cedula: doc.cedula,
       telefono: doc.telefono,
       direccion: doc.direccion || "",
-      correo: doc.correo,
-      usuarioId: doc.usuarioId || null,
+      correo: doc.correo || doc.usuario?.correo || "",
+      usuarioId: doc.usuarioId || doc.usuario?.id || null,
       estado: doc.estado,
     });
     setIsEditOpen(true);
@@ -115,6 +149,26 @@ export default function DocentesPage() {
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setValidationErrors({});
+
+    // Validaciones estrictas de calidad de software
+    const errs: Record<string, string> = {};
+    if (!formData.usuarioId) {
+      errs.usuarioId = "Es obligatorio vincular una cuenta de usuario al docente.";
+    }
+    const cedErr = validateCedula(formData.cedula);
+    if (cedErr) errs.cedula = cedErr;
+    const phoneErr = validatePhone(formData.telefono, true);
+    if (phoneErr) errs.telefono = phoneErr;
+    const dirErr = validateNotEmpty(formData.direccion, "Dirección");
+    if (dirErr) errs.direccion = dirErr;
+
+    if (Object.keys(errs).length > 0) {
+      setValidationErrors(errs);
+      error("Por favor completa los campos requeridos correctamente.");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       await docentesService.create(formData);
@@ -131,6 +185,25 @@ export default function DocentesPage() {
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedDocente) return;
+    setValidationErrors({});
+
+    const errs: Record<string, string> = {};
+    if (!formData.usuarioId) {
+      errs.usuarioId = "El docente debe mantener una cuenta de usuario vinculada.";
+    }
+    const cedErr = validateCedula(formData.cedula);
+    if (cedErr) errs.cedula = cedErr;
+    const phoneErr = validatePhone(formData.telefono, true);
+    if (phoneErr) errs.telefono = phoneErr;
+    const dirErr = validateNotEmpty(formData.direccion, "Dirección");
+    if (dirErr) errs.direccion = dirErr;
+
+    if (Object.keys(errs).length > 0) {
+      setValidationErrors(errs);
+      error("Por favor completa los campos requeridos correctamente.");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       await docentesService.update(selectedDocente.id, formData);
@@ -249,11 +322,27 @@ export default function DocentesPage() {
                 filteredDocentes.map((doc) => (
                   <tr key={doc.id} className="hover:bg-slate-50/70 transition-colors">
                     <td className="py-3 px-4">
-                      <div>
-                        <p className="font-semibold text-slate-900">
-                          {doc.nombre} {doc.apellido}
-                        </p>
-                        <p className="text-xs text-slate-400 font-mono mt-0.5">{doc.correo}</p>
+                      <div className="flex items-center gap-3">
+                        <div
+                          onClick={() => handleOpenPerfil(doc)}
+                          className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-200 hover:border-yellow-400 hover:bg-yellow-50 flex items-center justify-center font-bold text-xs text-blue-700 cursor-pointer overflow-hidden shrink-0 shadow-xs transition-all"
+                          title="Clic para ver perfil completo del docente"
+                        >
+                          {doc.foto ? (
+                            <img src={doc.foto} alt={doc.nombre} className="w-full h-full object-cover" />
+                          ) : (
+                            getInitials(doc.nombre, doc.apellido)
+                          )}
+                        </div>
+                        <div>
+                          <p
+                            onClick={() => handleOpenPerfil(doc)}
+                            className="font-semibold text-slate-900 hover:text-blue-600 cursor-pointer transition-colors"
+                          >
+                            {doc.nombre} {doc.apellido}
+                          </p>
+                          <p className="text-xs text-slate-400 font-mono mt-0.5">{doc.correo}</p>
+                        </div>
                       </div>
                     </td>
                     <td className="py-3 px-4 font-mono text-xs font-medium text-slate-700">
@@ -292,6 +381,14 @@ export default function DocentesPage() {
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         <button
+                          onClick={() => handleOpenPerfil(doc)}
+                          className="px-2.5 py-1 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-yellow-50 hover:text-blue-900 rounded-lg border border-blue-200 hover:border-yellow-400 transition-all flex items-center gap-1 shadow-xs"
+                          title="Ver Perfil Completo del Docente"
+                        >
+                          <FileText className="w-3.5 h-3.5 text-blue-600" />
+                          <span>Perfil</span>
+                        </button>
+                        <button
                           onClick={() => handleOpenEdit(doc)}
                           className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                           title="Editar"
@@ -323,108 +420,167 @@ export default function DocentesPage() {
         isOpen={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
         title="Registrar Docente"
-        description="Propuesta de contrato: POST /docentes"
+        description="Ingresa los datos para registrar un docente en el sistema institucional"
         maxWidth="lg"
       >
         <form onSubmit={handleCreateSubmit} className="space-y-4">
+          {/* Advertencia si no hay usuarios disponibles */}
+          {availableUsersForDocente.length === 0 && (
+            <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold">No hay cuentas de usuario disponibles sin docente asignado</p>
+                <p className="mt-0.5 text-amber-800">
+                  Todo docente requiere una cuenta de usuario vinculada (relación 1:1 obligatoria). Ve al módulo de <strong>Usuarios</strong> para crear una cuenta previa.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Selector de Usuario Obligatorio */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Cuenta de Usuario a Vincular * (Obligatoria)
+            </label>
+            <select
+              value={formData.usuarioId || ""}
+              onChange={(e) => {
+                const uid = e.target.value || null;
+                const sel = usuarios.find((u) => u.id === uid);
+                setFormData({
+                  ...formData,
+                  usuarioId: uid,
+                  nombre: sel ? (sel.nombres || sel.nombre || "") : "",
+                  apellido: sel ? (sel.apellidos || sel.apellido || "") : "",
+                  correo: sel ? sel.correo : "",
+                });
+                if (validationErrors.usuarioId) {
+                  setValidationErrors((prev) => ({ ...prev, usuarioId: "" }));
+                }
+              }}
+              required
+              className={`w-full px-3 py-2 text-xs bg-slate-50 border rounded-xl focus:outline-none focus:ring-2 ${
+                validationErrors.usuarioId
+                  ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20"
+                  : "border-slate-200 focus:ring-blue-500"
+              }`}
+            >
+              <option value="">-- Selecciona la cuenta de usuario a vincular --</option>
+              {availableUsersForDocente.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.username} — {u.nombres || u.nombre} {u.apellidos || u.apellido} ({u.correo})
+                </option>
+              ))}
+            </select>
+            {validationErrors.usuarioId && (
+              <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1 mt-1">
+                <AlertCircle className="w-3.5 h-3.5" />
+                <span>{validationErrors.usuarioId}</span>
+              </p>
+            )}
+          </div>
+
+          {/* Previsualización del usuario seleccionado */}
+          {formData.usuarioId && (
+            <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                <UserCheck className="w-4 h-4 text-blue-600 shrink-0" />
+                <div>
+                  <p className="font-bold text-blue-950">
+                    {formData.nombre} {formData.apellido}
+                  </p>
+                  <p className="text-[11px] text-blue-700">
+                    Correo: {formData.correo || "Sin correo"}
+                  </p>
+                </div>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-600 text-white font-bold">
+                Cuenta Vinculada
+              </span>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Nombre *</label>
-              <input
-                type="text"
-                value={formData.nombre}
-                onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                placeholder="María"
-                required
-                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Apellido *</label>
-              <input
-                type="text"
-                value={formData.apellido}
-                onChange={(e) => setFormData({ ...formData, apellido: e.target.value })}
-                placeholder="López"
-                required
-                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-
-            <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Cédula de Identidad *
+                Cédula de Identidad * (Única, máx. 30 caracteres)
               </label>
               <input
                 type="text"
                 value={formData.cedula}
-                onChange={(e) => setFormData({ ...formData, cedula: e.target.value })}
+                onChange={(e) => {
+                  setFormData({ ...formData, cedula: e.target.value });
+                  if (validationErrors.cedula) setValidationErrors((prev) => ({ ...prev, cedula: "" }));
+                }}
                 placeholder="001-120585-2000B"
                 required
-                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className={`w-full px-3 py-2 text-xs bg-slate-50 border rounded-xl font-mono focus:outline-none focus:ring-2 ${
+                  validationErrors.cedula
+                    ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20"
+                    : "border-slate-200 focus:ring-blue-500"
+                }`}
               />
+              {validationErrors.cedula && (
+                <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1 mt-1">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  <span>{validationErrors.cedula}</span>
+                </p>
+              )}
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Teléfono *</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Teléfono de Contacto *
+              </label>
               <input
                 type="text"
                 value={formData.telefono}
-                onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
-                placeholder="87776655"
+                onChange={(e) => {
+                  setFormData({ ...formData, telefono: e.target.value });
+                  if (validationErrors.telefono) setValidationErrors((prev) => ({ ...prev, telefono: "" }));
+                }}
+                placeholder="8777-6655"
                 required
-                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className={`w-full px-3 py-2 text-xs bg-slate-50 border rounded-xl focus:outline-none focus:ring-2 ${
+                  validationErrors.telefono
+                    ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20"
+                    : "border-slate-200 focus:ring-blue-500"
+                }`}
               />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Correo Electrónico *
-              </label>
-              <input
-                type="email"
-                value={formData.correo}
-                onChange={(e) => setFormData({ ...formData, correo: e.target.value })}
-                placeholder="mlopez@colegio.edu.ni"
-                required
-                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Cuenta de Usuario Asociada (usuarioId)
-              </label>
-              <select
-                value={formData.usuarioId || ""}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    usuarioId: e.target.value ? Number(e.target.value) : null,
-                  })
-                }
-                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="">-- Sin Vincular --</option>
-                {usuarios.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.username} ({u.nombre} {u.apellido})
-                  </option>
-                ))}
-              </select>
+              {validationErrors.telefono && (
+                <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1 mt-1">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  <span>{validationErrors.telefono}</span>
+                </p>
+              )}
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Dirección</label>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Dirección de Domicilio *
+            </label>
             <input
               type="text"
               value={formData.direccion}
-              onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
+              onChange={(e) => {
+                setFormData({ ...formData, direccion: e.target.value });
+                if (validationErrors.direccion) setValidationErrors((prev) => ({ ...prev, direccion: "" }));
+              }}
               placeholder="Reparto Los Pinos, Matagalpa"
-              className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              required
+              className={`w-full px-3 py-2 text-xs bg-slate-50 border rounded-xl focus:outline-none focus:ring-2 ${
+                validationErrors.direccion
+                  ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20"
+                  : "border-slate-200 focus:ring-blue-500"
+              }`}
             />
+            {validationErrors.direccion && (
+              <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1 mt-1">
+                <AlertCircle className="w-3.5 h-3.5" />
+                <span>{validationErrors.direccion}</span>
+              </p>
+            )}
           </div>
 
           <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
@@ -437,8 +593,8 @@ export default function DocentesPage() {
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
-              className="px-4 py-2 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm transition-all disabled:opacity-50"
+              disabled={isSubmitting || availableUsersForDocente.length === 0}
+              className="px-4 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm transition-all disabled:opacity-50 flex items-center gap-1.5"
             >
               {isSubmitting ? "Guardando..." : "Guardar Docente"}
             </button>
@@ -451,98 +607,120 @@ export default function DocentesPage() {
         isOpen={isEditOpen}
         onClose={() => setIsEditOpen(false)}
         title="Editar Docente"
-        description="Actualizar información del profesor (PUT /docentes/{id})"
+        description="Actualizar datos laborales y de contacto del docente"
         maxWidth="lg"
       >
         <form onSubmit={handleEditSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Cuenta de Usuario Vinculada *
+            </label>
+            <select
+              value={formData.usuarioId || ""}
+              onChange={(e) => {
+                const uid = e.target.value || null;
+                const sel = usuarios.find((u) => u.id === uid);
+                setFormData({
+                  ...formData,
+                  usuarioId: uid,
+                  nombre: sel ? (sel.nombres || sel.nombre || "") : formData.nombre,
+                  apellido: sel ? (sel.apellidos || sel.apellido || "") : formData.apellido,
+                  correo: sel ? sel.correo : formData.correo,
+                });
+                if (validationErrors.usuarioId) {
+                  setValidationErrors((prev) => ({ ...prev, usuarioId: "" }));
+                }
+              }}
+              required
+              className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">-- Selecciona cuenta de usuario --</option>
+              {usuarios.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.username} — {u.nombres || u.nombre} {u.apellidos || u.apellido} ({u.correo})
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Nombre</label>
-              <input
-                type="text"
-                value={formData.nombre}
-                onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                required
-                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Apellido</label>
-              <input
-                type="text"
-                value={formData.apellido}
-                onChange={(e) => setFormData({ ...formData, apellido: e.target.value })}
-                required
-                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Cédula</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Cédula de Identidad *
+              </label>
               <input
                 type="text"
                 value={formData.cedula}
-                onChange={(e) => setFormData({ ...formData, cedula: e.target.value })}
+                onChange={(e) => {
+                  setFormData({ ...formData, cedula: e.target.value });
+                  if (validationErrors.cedula) setValidationErrors((prev) => ({ ...prev, cedula: "" }));
+                }}
                 required
-                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className={`w-full px-3 py-2 text-xs bg-slate-50 border rounded-xl font-mono focus:outline-none focus:ring-2 ${
+                  validationErrors.cedula
+                    ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20"
+                    : "border-slate-200 focus:ring-blue-500"
+                }`}
               />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Teléfono</label>
-              <input
-                type="text"
-                value={formData.telefono}
-                onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
-                required
-                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Correo</label>
-              <input
-                type="email"
-                value={formData.correo}
-                onChange={(e) => setFormData({ ...formData, correo: e.target.value })}
-                required
-                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
+              {validationErrors.cedula && (
+                <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1 mt-1">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  <span>{validationErrors.cedula}</span>
+                </p>
+              )}
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Usuario Asociado
+                Teléfono de Contacto *
               </label>
-              <select
-                value={formData.usuarioId || ""}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    usuarioId: e.target.value ? Number(e.target.value) : null,
-                  })
-                }
-                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              >
-                <option value="">-- Sin Vincular --</option>
-                {usuarios.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.username} ({u.nombre} {u.apellido})
-                  </option>
-                ))}
-              </select>
+              <input
+                type="text"
+                value={formData.telefono}
+                onChange={(e) => {
+                  setFormData({ ...formData, telefono: e.target.value });
+                  if (validationErrors.telefono) setValidationErrors((prev) => ({ ...prev, telefono: "" }));
+                }}
+                required
+                className={`w-full px-3 py-2 text-xs bg-slate-50 border rounded-xl focus:outline-none focus:ring-2 ${
+                  validationErrors.telefono
+                    ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20"
+                    : "border-slate-200 focus:ring-blue-500"
+                }`}
+              />
+              {validationErrors.telefono && (
+                <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1 mt-1">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  <span>{validationErrors.telefono}</span>
+                </p>
+              )}
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">Dirección</label>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">
+              Dirección de Domicilio *
+            </label>
             <input
               type="text"
               value={formData.direccion}
-              onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
-              className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              onChange={(e) => {
+                setFormData({ ...formData, direccion: e.target.value });
+                if (validationErrors.direccion) setValidationErrors((prev) => ({ ...prev, direccion: "" }));
+              }}
+              required
+              className={`w-full px-3 py-2 text-xs bg-slate-50 border rounded-xl focus:outline-none focus:ring-2 ${
+                validationErrors.direccion
+                  ? "border-rose-400 focus:ring-rose-500 bg-rose-50/20"
+                  : "border-slate-200 focus:ring-blue-500"
+              }`}
             />
+            {validationErrors.direccion && (
+              <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1 mt-1">
+                <AlertCircle className="w-3.5 h-3.5" />
+                <span>{validationErrors.direccion}</span>
+              </p>
+            )}
           </div>
 
           <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
@@ -563,6 +741,13 @@ export default function DocentesPage() {
           </div>
         </form>
       </Modal>
+
+      {/* Modal Perfil Completo del Docente */}
+      <PerfilDocenteModal
+        isOpen={isPerfilOpen}
+        onClose={() => setIsPerfilOpen(false)}
+        docente={selectedDocente}
+      />
 
       {/* Confirmar Eliminación */}
       <ConfirmDialog

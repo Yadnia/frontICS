@@ -4,7 +4,8 @@ import React, { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { rolesService } from "@/services/roles.service";
-import { Role, RoleCreateDTO } from "@/types/api";
+import { permisosService } from "@/services/permisos.service";
+import { Role, RoleCreateDTO, Permiso } from "@/types/api";
 import { Modal } from "@/components/ui/Modal";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { RoleBadge } from "@/components/ui/Badge";
@@ -23,6 +24,7 @@ export default function RolesPage() {
   const { success, error, info } = useToast();
 
   const [roles, setRoles] = useState<Role[]>([]);
+  const [permisos, setPermisos] = useState<Permiso[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Modales
@@ -41,8 +43,12 @@ export default function RolesPage() {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const data = await rolesService.getAll();
-      setRoles(data);
+      const [rolesData, permisosData] = await Promise.allSettled([
+        rolesService.getAll(),
+        permisosService.getAll(),
+      ]);
+      if (rolesData.status === "fulfilled") setRoles(rolesData.value);
+      if (permisosData.status === "fulfilled") setPermisos(permisosData.value);
     } catch (err: any) {
       error(err.message || "Error al cargar la lista de roles");
     } finally {
@@ -76,7 +82,7 @@ export default function RolesPage() {
     setIsSubmitting(true);
     try {
       await rolesService.create(formData);
-      success("Rol creado exitosamente (POST /roles)");
+      success("Rol creado exitosamente");
       setIsCreateOpen(false);
       loadData();
     } catch (err: any) {
@@ -200,7 +206,9 @@ export default function RolesPage() {
               ) : (
                 roles.map((r) => (
                   <tr key={r.id} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="py-3 px-4 font-mono text-xs text-slate-400">#{r.id}</td>
+                    <td className="py-3 px-4 font-mono text-xs text-slate-500 truncate max-w-[140px]" title={r.id}>
+                      {r.id.length > 12 ? `${r.id.substring(0, 8)}...` : `#${r.id}`}
+                    </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
                         <RoleBadge role={r.nombre} />
@@ -213,7 +221,7 @@ export default function RolesPage() {
                       <div className="flex items-center justify-end gap-1.5">
                         <button
                           onClick={() => handleOpenEdit(r)}
-                          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                           title="Editar"
                         >
                           <Edit2 className="w-4 h-4" />
@@ -240,6 +248,61 @@ export default function RolesPage() {
               )}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* Sección Catálogo de Permisos (Endpoint: GET /api/permisos - solo ADMIN) */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center font-bold border border-blue-200">
+              <Lock className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-slate-900 tracking-tight">
+                  Permisos del Sistema (RBAC)
+                </h3>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-400 text-blue-950">
+                  Solo ADMIN
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Privilegios del sistema cargados desde <code className="font-mono text-blue-700">GET /api/permisos</code>
+              </p>
+            </div>
+          </div>
+          <span className="text-xs font-bold px-3 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 self-start sm:self-auto">
+            {permisos.length} Permisos Registrados
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+          {permisos.map((p) => (
+            <div
+              key={p.id}
+              className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 hover:border-yellow-400 hover:bg-yellow-50/30 transition-all flex flex-col justify-between"
+            >
+              <div>
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <span className="font-mono text-xs font-bold text-blue-900">
+                    {p.codigo || p.nombre}
+                  </span>
+                  {p.modulo && (
+                    <span className="text-[10px] font-semibold px-2 py-0.2 rounded bg-blue-100 text-blue-800">
+                      {p.modulo}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-600 leading-snug">
+                  {p.descripcion || "Permiso de operación en la API"}
+                </p>
+              </div>
+              <p className="text-[10px] text-slate-400 font-mono mt-2 truncate" title={p.id}>
+                ID: {p.id}
+              </p>
+            </div>
+          ))}
         </div>
       </div>
 
